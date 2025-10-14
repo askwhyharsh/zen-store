@@ -1,1 +1,1 @@
-Zenstore - P2P file storage 
+ZenStore - Distributed (p2p) file storage 
