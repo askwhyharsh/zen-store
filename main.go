@@ -1,23 +1,73 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"time"
 
 	"github.com/askwhyharsh/zen-store/p2p"
 )
 
-func main() {
-	fmt.Println("let's go")
-	tcpOpts := p2p.TCPTransportOpts{
-		ListenAddr: ":3000",
-		HandShakeFunc: p2p.NOPHandShakeFunc,
-		Decoder: p2p.DefaultDecoder{},
+func makeServer(listenAddr string, nodes ...string) *FileServer {
+	tcptransportOpts := p2p.TCPTransportOpts{
+		ListenAddr:    listenAddr,
+		HandshakeFunc: p2p.NOPHandshakeFunc,
+		Decoder:       p2p.DefaultDecoder{},
 	}
-	tr := p2p.NewTCPTransport(tcpOpts)
-	if err := tr.ListenAndAccept(); err != nil {
-		log.Fatal(err)
+	tcpTransport := p2p.NewTCPTransport(tcptransportOpts)
+
+	fileServerOpts := FileServerOpts{
+		EncKey:            newEncryptionKey(),
+		StorageRoot:       listenAddr + "_network",
+		PathTransformFunc: CASPathTransformFunc,
+		Transport:         tcpTransport,
+		BootstrapNodes:    nodes,
 	}
 
-	select {}
+	s := NewFileServer(fileServerOpts)
+
+	tcpTransport.OnPeer = s.OnPeer
+
+	return s
+}
+
+func main() {
+	s1 := makeServer(":3001", "")
+	s2 := makeServer(":3002", "")
+	s3 := makeServer(":3003", ":3001", ":3002")
+
+	go func() { log.Fatal(s1.Start()) }()
+	time.Sleep(500 * time.Millisecond)
+	go func() { log.Fatal(s2.Start()) }()
+
+	time.Sleep(2 * time.Second)
+
+	go s3.Start()
+	time.Sleep(2 * time.Second)
+
+	for i := 0; i < 20; i++ {
+		// let's test by creating new file, 20 times 
+		key := fmt.Sprintf("picture_%d.png", i)
+		data := bytes.NewReader([]byte("my big data file here!"))
+		s3.Store(key, data)
+
+		// we store and then delete the file from s3 server
+		if err := s3.store.Delete(s3.ID, key); err != nil {
+			log.Fatal(err)
+		}
+
+		r, err := s3.Get(key)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		b, err := ioutil.ReadAll(r)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		fmt.Println(string(b))
+	}
 }
