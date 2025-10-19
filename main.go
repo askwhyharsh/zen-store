@@ -21,8 +21,8 @@ func makeServer(listenAddr string, nodes ...string) *FileServer {
 	fileServerOpts := FileServerOpts{
 		EncKey:            newEncryptionKey(),
 		StorageRoot:       listenAddr + "_network",
-		PathTransformFunc: CASPathTransformFunc,
-		Transport:         tcpTransport,
+		PathTransformFunc: CASPathTransformFunc, // path transform func
+		Transport:         tcpTransport, // tcp transport 
 		BootstrapNodes:    nodes,
 	}
 
